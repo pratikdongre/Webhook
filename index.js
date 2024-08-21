@@ -4,12 +4,23 @@
     const axios = require("axios");
 
     const app = express().use(body_parser.json());
+    app.use(express.json({ extended: false }));
+
+
     require('dotenv').config();
 
-    const fs = require('fs'); //file system for logging
+    // const fs = require('fs'); //file system for logging
+    // const logFile = fs.createWriteStream('webhook.log', { flags: 'a' });
 
 
-    const logFile = fs.createWriteStream('webhook.log', { flags: 'a' });
+    const log4js = require('log4js');
+    log4js.configure({
+        appenders: {Webhook : {type : 'file', filename : "Webhook.log"}},
+        categories :{default : {appenders : ['Webhook'], level : 'info'}}
+    });
+
+    const logger = log4js.getLogger("Webhook");
+
 
 
     //you need to put the callback url on the server eg whatsapp api and verify token that you have set here in env
@@ -42,6 +53,7 @@
             if (mode === "subscribe" && verify_token === mytoken)
             {
                 res.status(200).send(challenge);
+                
             }
             else {
                 res.status(403).send("Forbidden");
@@ -60,17 +72,18 @@
 
 
     app.post("/webhook",(req,res)=>{
+        console.log("Webhook hit!"); 
 
         let body_param = req.body;
 
         console.log(JSON.stringify(body_param, null, 2));
-        logFile.write(`${new Date().toISOString()} - ${JSON.stringify(body_param, null, 2)}\n`);
+        logger.info('Recived Data: ',JSON.stringify(body_param, null, 2));
+        // logFile.write(`${new Date().toISOString()} - ${JSON.stringify(body_param, null, 2)}\n`);
 
         
         // at this point check the payload example to fill the type of var that server required 
 
-        if (body_param.object)
-        {
+        if (body_param.object)  {
             if(body_param.entry && 
                 body_param.entry[0].changes &&
                 body_param.entry[0].changes[0].value.messages &&
@@ -100,10 +113,10 @@
                         
                     }).then(response => {
                         console.log('Message sent successfully:', response.data);
-                        logFile.write(`${new Date().toISOString()} - Message sent successfully: ${JSON.stringify(response.data, null, 2)}\n`);
+                        // logFile.write(`${new Date().toISOString()} - Message sent successfully: ${JSON.stringify(response.data, null, 2)}\n`);
                     }).catch(error => {
                         console.error('Error sending message:', error);
-                        logFile.write(`${new Date().toISOString()} - Error sending message: ${error}\n`);
+                        // logFile.write(`${new Date().toISOString()} - Error sending message: ${error}\n`);
                     });
 
                     res.sendStatus(200);
@@ -112,6 +125,17 @@
                 else {
                     res.sendStatus(404);
                 }
+        
+        }
+
+        else if (body_param.data) {
+            // console.log("Recieved data :- ",body_param.data);
+            res.status(200).send(`Recived the data ${body_param.data}`);
+
+        }
+
+        else {
+            res.status(400).send(`Unknown Payload Structure`);
         }
         
     });
