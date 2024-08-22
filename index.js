@@ -7,6 +7,8 @@
     app.use(express.json({ extended: false }));
 
 
+    const mysql =  require('mysql2');
+
     require('dotenv').config();
 
     // const fs = require('fs'); //file system for logging
@@ -20,6 +22,24 @@
     });
 
     const logger = log4js.getLogger("Webhook");
+
+
+    // db 
+    const db = mysql.createConnection({
+        host : 'localhost',
+        user : 'user', 
+        password : 'redhat',
+        database : 'webhook'
+    });
+
+    db.connect(err =>{
+        if (err) {
+            logger.error("Database Connection error :",err);
+            throw err;
+        } else {
+            logger.info("Connected to the database");
+        }
+    });
 
 
 
@@ -71,75 +91,59 @@
 
 
 
-    app.post("/webhook",(req,res)=>{
+    app.post("/webhook", (req, res) => {
         console.log("Webhook hit!"); // working
-
+    
         let body_param = req.body;
-
+    
         console.log(JSON.stringify(body_param, null, 2));
-        logger.info('Recived Data: ',JSON.stringify(body_param, null, 2));
-        // logFile.write(`${new Date().toISOString()} - ${JSON.stringify(body_param, null, 2)}\n`);
-
-        
-        // at this point check the payload example to fill the type of var that server required 
-
-        if (body_param.object)  {
-            if(body_param.entry && 
+        logger.info('Received Data: ', JSON.stringify(body_param, null, 2));
+    
+        if (body_param.object) {
+            if (body_param.entry &&
                 body_param.entry[0].changes &&
                 body_param.entry[0].changes[0].value.messages &&
-                body_param.entry[0].changes[0].value.messages[0]
-                )
-                {
-                    let phone_no_id = body_param.entry[0].changes[0].value.metadata.phone_number_id;
-                    let from = body_param.entry[0].changes[0].value.messages[0].from; // user phone number 
-                    let msg_body =body_param.entry[0].changes[0].value.messages[0].text.body;
-
-                //    respond msg 
-                    axios({
-                        method : "POST",
-                        url : "https://graph.facebook.com/v20.0/"+phone_no_id+"/messages?access_token="+token,
-                        data : {
-                            "messaging_product": "whatsapp",
-                            "to" : from,
-                            "text" : {
-                                body : "HI im pratik"
-                            }
-                        },
-                        headers :{
-                            "Content-Type": "application/json",
-
+                body_param.entry[0].changes[0].value.messages[0]) {
+    
+                const phone_number_id = body_param.entry[0].changes[0].value.metadata.phone_number_id;
+                const from_phone = body_param.entry[0].changes[0].value.messages[0].from; // user phone number 
+                const message_body = body_param.entry[0].changes[0].value.messages[0].text.body;
+    
+                const dataToInsert = [phone_number_id,from_phone,message_body];    
+                   
+    
+                const query = `insert into webhook_data (phone_number_id,from_phone,message_body)
+                values (?,?,?)`;
+    
+                db.query(query, dataToInsert, (err, result) => {
+                    if (err) {  
+                        logger.error("Error inserting into database", err);
+                        if (!res.headersSent) {
+                            return res.status(500).json({ status: "error", message: "Database Error" });
                         }
-
-                        
-                    }).then(response => {
-                        console.log('Message sent successfully:', response.data);
-                        // logFile.write(`${new Date().toISOString()} - Message sent successfully: ${JSON.stringify(response.data, null, 2)}\n`);
-                    }).catch(error => {
-                        console.error('Error sending message:', error);
-                        // logFile.write(`${new Date().toISOString()} - Error sending message: ${error}\n`);
-                    });
-
-                    res.sendStatus(200);
-
-                }
-                else {
+                    } else {
+                        logger.info("Data successfully inserted into the database", result);
+                        res.status(200).json({ status: "success" });
+                        if (!res.headersSent) {
+                        }
+                    }
+                });
+            } else {
+                if (!res.headersSent) {
                     res.sendStatus(404);
                 }
-        
+            }
+        } else if (body_param.data) {
+            if (!res.headersSent) {
+                res.status(200).send(`Received the data ${body_param.data}`);
+            }
+        } else {
+            if (!res.headersSent) {
+                res.status(400).send(`Unknown Payload Structure`);
+            }
         }
-
-        else if (body_param.data) {
-            // console.log("Recieved data :- ",body_param.data);
-            res.status(200).send(`Recived the data ${body_param.data}`);
-
-        }
-
-        else {
-            res.status(400).send(`Unknown Payload Structure`);
-        }
-        
     });
-
+    
         // app.post("/webhook",(req,res)=>{
         //     console.log(JSON.stringify(body_param,null,2));
         //                         res.sendStatus(200);
