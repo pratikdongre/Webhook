@@ -1,4 +1,7 @@
-
+//not important for now for main purpose that is webhook
+// this was to delete some issue that was coming while connecting with database 
+// but now it has been acheieved and it is not mandatory step to do 
+// you could write the query direcly to the db mysql if required 
 
 const mysql = require('mysql2'); // Use 'mysql' if you're using mysql library
 
